@@ -1,0 +1,224 @@
+---
+title: "Map with rowing gps tracks"
+author: "Michele Adamoli"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    code_folding: hide
+---
+
+# Introduction
+
+The aim of this script is to produce a map comparing two GPS-tracks by rowing.
+
+```{r}
+
+# Libraries
+
+library(pacman)
+
+p_load("tidyverse",
+       "lubridate",
+       "janitor",
+       "DT",
+       "knitr")
+
+p_load("ggnewscale", "ggsn", "osmdata", "sf", "z11")
+
+
+
+# Options R markdown
+
+opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,  results = 'markup')
+
+
+
+```
+
+
+# Collect data
+
+First, you need to collect data from the Speedcoach (NK). For the map you need gps-position for each individual stroke.^[I also load summary data.]
+
+```{r}
+# Files vector
+
+vec_data <- paste0("input/speedcoach/", list.files("input/speedcoach"))
+
+# Dummy tibble for data per stroke   
+
+
+vec_name_per_stroke <- c(
+    "interval" ,
+    "distance_gps" ,
+    "distance_imp" ,
+    "elapsed_time" ,
+    "split_gps" ,
+    "speed_gps" ,
+    "split_imp" ,
+    "speed_imp" ,
+    "stroke_rate" ,
+    "total_strokes" ,
+    "distance_stroke_gps",
+    "distance_stroke_imp",
+    "heart_rate",
+    "power" ,
+    "catch" ,
+    "slip" ,
+    "finish" ,
+    "wash" ,
+    "force_avg" ,
+    "work" ,
+    "force_max" ,
+    "max_force_angle" ,
+    "gps_lat" ,
+    "gps_lon",
+    "id"
+)
+
+vec_names <- setNames(rep("", length(vec_name_per_stroke)), vec_name_per_stroke)
+data_stroke_0 <- as_tibble(t(vec_names))[0, ]
+
+# Dummy for summary
+
+vec_name_per_workout <- c(
+    "interval" ,
+    "total_distance_gps",
+    "total_distance_imp",
+    "total_elapsed_time",
+    "avg_split_gps" ,
+    "avg_speed_gps" ,
+    "avg_split_imp" ,
+    "avg_speed_imp" ,
+    "avg_stroke_rate" ,
+    "total_strokes" ,
+    "distance_stroke_gps",
+    "distance_stroke_imp",
+    "avg_heart_rate" ,
+    "avg_power" ,
+    "avg_catch" ,
+    "avg_slip" ,
+    "avg_finish" ,
+    "avg_wash" ,
+    "avg_force_avg" ,
+    "avg_work" ,
+    "avg_force_max" ,
+    "avg_max_force_angle",
+    "start_gps_lat" ,
+    "start_gps_lon",
+    "id"
+)
+
+vec_names <- setNames(rep("", length(vec_name_per_workout)), vec_name_per_workout)
+data_sum_0 <- as_tibble(t(vec_names))[0, ]
+
+# Loop
+
+for (i in 1:length(vec_data)) {
+    
+    # Metadata
+    
+    meta_data <- read_csv(vec_data[i], col_names = FALSE)
+    workout <- meta_data[2, 2] %>% pull()
+    id <- meta_data[3, 2] %>% pull()
+    
+    time_m <- str_sub(id, 15, 16)
+    
+    time_h <- str_sub(id, 12, 13)
+    
+    time <- if (as.numeric(time_h) > 12) {
+        paste0(str_pad(string = as.character(as.numeric(time_h) - 12),
+                       width = 2, side = "left", pad = "0"), time_m, "PM")
+    } else if (time_h == "12") {
+        paste0(12, time_m, "PM")
+    } else {
+        paste0(time_h, time_m, "AM")
+    }
+
+    time_mm <- str_sub(id, 1,2)
+    time_dd <- str_sub(id, 4,5)
+    time_yy <- str_sub(id, 7,10)
+    
+    date <- paste0(time_dd, "/", time_mm, "/", time_yy)
+    
+    # Data per stroke
+    
+    data_stroke <- read_delim(vec_data[i], 
+                              delim = ",", 
+                              col_names = TRUE, 
+                              skip = 28,
+                              col_type = paste(rep("c", 27), collapse = "")) %>% 
+        clean_names() %>% 
+        filter(interval != "(Interval)") %>% 
+        mutate(id = id) %>% 
+        mutate(date = date) %>% 
+        mutate(time = time)  %>% 
+        mutate(workout = workout)
+        
+    # Data summary 
+    
+    data_sum <- read_delim(vec_data[i], delim = ",",
+                           col_names = TRUE,
+                           skip = 20,
+                           col_type = paste(rep("c", 27), collapse = "")) %>% 
+        clean_names()
+    
+    n_interval <- which(data_sum$interval == "Per-Stroke Data:")
+    
+    data_sum <- data_sum[2:(n_interval - 1),] %>% 
+       mutate(id = id) %>% 
+       mutate(date = date) %>% 
+       mutate(time = time) %>% 
+       mutate(workout = workout)
+        
+    # Finalise
+    
+    data_stroke_0 <- bind_rows(data_stroke , data_stroke_0) 
+    data_sum_0 <- bind_rows(data_sum , data_sum_0)
+    
+}
+
+
+```
+
+# Wohlensee map
+
+This map shows two 200m tracks on the water (blue and red lines). The maps comes from openstreetmap.org.
+
+```{r}
+
+# Get OSM data for the specified area
+
+wohlensee_sf <-
+  osmdata::getbb(place_name = "Wohlensee") %>% 
+  osmdata::opq(timeout = 25*100) %>%
+  osmdata::add_osm_feature(key = 'natural', value = 'water') %>% 
+  osmdata::osmdata_sf() %$% 
+  osm_multipolygons %>% 
+  dplyr::select(geometry)
+
+# Prepare gps data
+
+gps_data_0 <- data_stroke_0 %>% 
+  mutate(across(c("gps_lat", "gps_lon"), ~as.numeric(.)))
+
+gps_data_1 <- gps_data_0 %>% 
+  filter(id == "08/17/2023 08:19") %>% 
+  select(gps_lat, gps_lon)
+
+gps_data_2 <- gps_data_0 %>% 
+  filter(id == "11/11/2022 09:50") %>% 
+  select(gps_lat, gps_lon)
+
+# Plot area and gps data
+
+ggplot(wohlensee_sf, fill = NA) +
+  geom_sf() +
+  ggsn::blank() +
+  geom_line(data = gps_data_1, aes(x = gps_lon, y = gps_lat), color = "red", size = 1) +
+  geom_line(data = gps_data_2, aes(x = gps_lon, y = gps_lat), color = "blue", size = 1)
+
+
+```
+
+
