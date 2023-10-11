@@ -1,6 +1,6 @@
 ---
 title: "Map with rowing gps tracks"
-author: "Michele Adamoli"
+author: "by Michele Adamoli"
 date: "`r Sys.time()`"
 output:
   html_document:
@@ -9,7 +9,7 @@ output:
 
 # Introduction
 
-The aim of this script is to produce a map comparing two GPS-tracks by rowing.
+The aim of this script is to produce a map comparing rowing GPS-tracks.
 
 ```{r}
 
@@ -181,16 +181,16 @@ for (i in 1:length(vec_data)) {
 
 ```
 
-# Wohlensee map
+# Wörthersee map
 
-This map shows two 200m tracks on the water (blue and red lines). The maps comes from openstreetmap.org.
+This map shows the tracks on the water (red lines). The maps comes from openstreetmap.org.
 
 ```{r}
 
 # Get OSM data for the specified area
 
 wohlensee_sf <-
-  osmdata::getbb(place_name = "Wohlensee") %>% 
+  osmdata::getbb(place_name = "Wörthersee") %>% 
   osmdata::opq(timeout = 25*100) %>%
   osmdata::add_osm_feature(key = 'natural', value = 'water') %>% 
   osmdata::osmdata_sf() %$% 
@@ -203,20 +203,20 @@ gps_data_0 <- data_stroke_0 %>%
   mutate(across(c("gps_lat", "gps_lon"), ~as.numeric(.)))
 
 gps_data_1 <- gps_data_0 %>% 
-  filter(id == "08/17/2023 08:19") %>% 
+  filter(id == "10/07/2023 11:16") %>% 
   select(gps_lat, gps_lon)
 
-gps_data_2 <- gps_data_0 %>% 
-  filter(id == "11/11/2022 09:50") %>% 
-  select(gps_lat, gps_lon)
+# gps_data_2 <- gps_data_0 %>% 
+#   filter(id == "11/11/2022 09:50") %>% 
+#   select(gps_lat, gps_lon)
 
 # Plot area and gps data
 
 ggplot(wohlensee_sf, fill = NA) +
   geom_sf() +
   ggsn::blank() +
-  geom_line(data = gps_data_1, aes(x = gps_lon, y = gps_lat), color = "red", size = 1) +
-  geom_line(data = gps_data_2, aes(x = gps_lon, y = gps_lat), color = "blue", size = 1)
+  geom_line(data = gps_data_1, aes(x = gps_lon, y = gps_lat), color = "red", size = 0.1)
+  # geom_line(data = gps_data_2, aes(x = gps_lon, y = gps_lat), color = "blue", size = 1)
 
 
 ```
