@@ -1,5 +1,6 @@
 ---
-title: "Map with rowing gps tracks"
+title: "Rose am Wörthersee"
+subtitle: "Comparative analyses of rowing gps tracks"
 author: "by Michele Adamoli"
 date: "`r Sys.time()`"
 output:
@@ -38,7 +39,8 @@ opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,  results = 'markup
 
 # Collect data
 
-First, you need to collect data from the Speedcoach (NK). For the map you need gps-position for each individual stroke.^[I also load summary data.]
+First, you need to collect data from the Speedcoach (NK). For the map you need gps-position for each individual stroke.
+
 
 ```{r}
 # Files vector
@@ -116,31 +118,31 @@ data_sum_0 <- as_tibble(t(vec_names))[0, ]
 
 for (i in 1:length(vec_data)) {
     
-    # Metadata
-    
-    meta_data <- read_csv(vec_data[i], col_names = FALSE)
-    workout <- meta_data[2, 2] %>% pull()
-    id <- meta_data[3, 2] %>% pull()
-    
-    time_m <- str_sub(id, 15, 16)
-    
-    time_h <- str_sub(id, 12, 13)
-    
-    time <- if (as.numeric(time_h) > 12) {
-        paste0(str_pad(string = as.character(as.numeric(time_h) - 12),
-                       width = 2, side = "left", pad = "0"), time_m, "PM")
-    } else if (time_h == "12") {
-        paste0(12, time_m, "PM")
-    } else {
-        paste0(time_h, time_m, "AM")
-    }
-
-    time_mm <- str_sub(id, 1,2)
-    time_dd <- str_sub(id, 4,5)
-    time_yy <- str_sub(id, 7,10)
-    
-    date <- paste0(time_dd, "/", time_mm, "/", time_yy)
-    
+    # # Metadata
+    # 
+    # meta_data <- read_csv(vec_data[i], col_names = FALSE)
+    # workout <- meta_data[2, 2] %>% pull()
+    # id <- meta_data[3, 2] %>% pull()
+    # 
+    # time_m <- str_sub(id, 15, 16)
+    # 
+    # time_h <- str_sub(id, 12, 13)
+    # 
+    # time <- if (as.numeric(time_h) > 12) {
+    #     paste0(str_pad(string = as.character(as.numeric(time_h) - 12),
+    #                    width = 2, side = "left", pad = "0"), time_m, "PM")
+    # } else if (time_h == "12") {
+    #     paste0(12, time_m, "PM")
+    # } else {
+    #     paste0(time_h, time_m, "AM")
+    # }
+    # 
+    # time_mm <- str_sub(id, 1,2)
+    # time_dd <- str_sub(id, 4,5)
+    # time_yy <- str_sub(id, 7,10)
+    # 
+    # date <- paste0(time_dd, "/", time_mm, "/", time_yy)
+    # 
     # Data per stroke
     
     data_stroke <- read_delim(vec_data[i], 
@@ -150,31 +152,28 @@ for (i in 1:length(vec_data)) {
                               col_type = paste(rep("c", 27), collapse = "")) %>% 
         clean_names() %>% 
         filter(interval != "(Interval)") %>% 
-        mutate(id = id) %>% 
-        mutate(date = date) %>% 
-        mutate(time = time)  %>% 
-        mutate(workout = workout)
+        mutate(id = str_sub(vec_data[i], start = 18, end = -5))
         
-    # Data summary 
-    
-    data_sum <- read_delim(vec_data[i], delim = ",",
-                           col_names = TRUE,
-                           skip = 20,
-                           col_type = paste(rep("c", 27), collapse = "")) %>% 
-        clean_names()
-    
-    n_interval <- which(data_sum$interval == "Per-Stroke Data:")
-    
-    data_sum <- data_sum[2:(n_interval - 1),] %>% 
-       mutate(id = id) %>% 
-       mutate(date = date) %>% 
-       mutate(time = time) %>% 
-       mutate(workout = workout)
-        
+    # # Data summary 
+    # 
+    # data_sum <- read_delim(vec_data[i], delim = ",",
+    #                        col_names = TRUE,
+    #                        skip = 20,
+    #                        col_type = paste(rep("c", 27), collapse = "")) %>% 
+    #     clean_names()
+    # 
+    # n_interval <- which(data_sum$interval == "Per-Stroke Data:")
+    # 
+    # data_sum <- data_sum[2:(n_interval - 1),] %>% 
+    #    mutate(id = id) %>% 
+    #    mutate(date = date) %>% 
+    #    mutate(time = time) %>% 
+    #    mutate(workout = workout)
+    #     
     # Finalise
     
     data_stroke_0 <- bind_rows(data_stroke , data_stroke_0) 
-    data_sum_0 <- bind_rows(data_sum , data_sum_0)
+    # data_sum_0 <- bind_rows(data_sum , data_sum_0)
     
 }
 
@@ -183,13 +182,13 @@ for (i in 1:length(vec_data)) {
 
 # Wörthersee map
 
-This map shows the tracks on the water (red lines). The maps comes from openstreetmap.org.
+This map shows the tracks on the water. The Wöthersee maps comes from openstreetmap.org.
 
 ```{r}
 
 # Get OSM data for the specified area
 
-wohlensee_sf <-
+woerthersee_sf <-
   osmdata::getbb(place_name = "Wörthersee") %>% 
   osmdata::opq(timeout = 25*100) %>%
   osmdata::add_osm_feature(key = 'natural', value = 'water') %>% 
@@ -202,21 +201,20 @@ wohlensee_sf <-
 gps_data_0 <- data_stroke_0 %>% 
   mutate(across(c("gps_lat", "gps_lon"), ~as.numeric(.)))
 
-gps_data_1 <- gps_data_0 %>% 
-  filter(id == "10/07/2023 11:16") %>% 
-  select(gps_lat, gps_lon)
-
-# gps_data_2 <- gps_data_0 %>% 
-#   filter(id == "11/11/2022 09:50") %>% 
-#   select(gps_lat, gps_lon)
-
 # Plot area and gps data
 
-ggplot(wohlensee_sf, fill = NA) +
-  geom_sf() +
+p <- ggplot(woerthersee_sf) +
+  geom_sf(fill = "white") +
   ggsn::blank() +
-  geom_line(data = gps_data_1, aes(x = gps_lon, y = gps_lat), color = "red", size = 0.1)
-  # geom_line(data = gps_data_2, aes(x = gps_lon, y = gps_lat), color = "blue", size = 1)
+  geom_line(data = gps_data_0, aes(x = gps_lon, y = gps_lat, color = id), size = 0.25) +
+  theme(legend.position = "bottom") +
+  theme(legend.title = element_blank())
+
+# Show and save
+
+p
+
+ggsave(plot = p, filename = "output/gps_woerthersee.png", dpi = 450)
 
 
 ```
